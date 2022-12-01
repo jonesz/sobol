@@ -8,11 +8,24 @@ module type sobol_dir = {
   val m: [n][k]u32
 }
 
+-- | Output type to be converted to.
+module type sobol_output = {
+  type t
+
+  val i64: i64 -> t
+  val u32: u32 -> t
+  val f32: f32 -> t
+  val **: t -> t -> t
+  val /: t -> t -> t
+}
+
 module type sobol = {
+  -- | Scalar type.
+  type t
   -- | Dimensionality of sequence.
-  val D : i64
+  val D : i64 
   -- | The value `2**32`.
-  val norm : f64
+  val norm : t
   -- | `independent i` returns the `i`'th sobol vector (in u32)
   val independent : i32 -> [D]u32
   -- | `recurrent i v` returns the `i`'th sobol vector given `v` is the
@@ -20,14 +33,15 @@ module type sobol = {
   val recurrent : i32 -> [D]u32 -> [D]u32
   -- | `chunk i n` returns the array `[v(i),...,v(i+n-1)]` of sobol
   -- vectors where `v(j)` is the `j`'th D-dimensional sobol vector
-  val chunk : i32 -> (n:i64) -> [n][D]f64
+  val chunk : i32 -> (n:i64) -> [n][D]t
   --| `sobol n` generates `n` `D`-dimensional pointwise normalised
   -- sobol vectors.
-  val sobol : (n:i64) -> [n][D]f64
+  val sobol : (n:i64) -> [n][D]t
 }
 
-module Sobol (DM: sobol_dir) (X: { val D : i64 }) : sobol = {
+module Sobol (DM: sobol_dir) (X: { val D : i64 }) (T: sobol_output) : sobol with t = T.t = {
   let D = X.D
+  type t = T.t
 
   -- Compute direction vectors. In general, some work can be saved if
   -- we know the number of sobol numbers (N) up front. Here, however,
@@ -60,7 +74,7 @@ module Sobol (DM: sobol_dir) (X: { val D : i64 }) : sobol = {
   let index_of_least_significant_0 (x:i32) : i32 =
     loop i = 0 while i < 32 && ((x>>i)&1) != 0 do i + 1
 
-  let norm = 2.0 f64.** f64.i64 L
+  let norm = (T.f32 2.0) T.** T.i64 L
 
   let grayCode (x: i32): i32 = (x >> 1) ^ x
 
@@ -91,16 +105,16 @@ module Sobol (DM: sobol_dir) (X: { val D : i64 }) : sobol = {
     in map (\row -> row[bit]) dirvecs
 
   -- computes sobol numbers: offs,..,offs+n-1
-  let chunk (offs:i32) (n:i64) : [n][D]f64 =
+  let chunk (offs:i32) (n:i64) : [n][D]t =
     let sob_beg = independent offs
     let contrbs = map (\k: [D]u32 ->
                        if k==0 then sob_beg
                        else recM (i32.i64 k+offs-1))
                       (iota n)
     let vct_ints = scan (map2 (^)) (replicate D 0u32) contrbs
-    in map (\xs -> map (\x -> f64.u32 x/norm) xs)
+    in map (\xs -> map (\x -> (T.u32 x) T./ norm) xs)
            vct_ints
 
-  let sobol (n:i64) : [n][D]f64 =
-    tabulate n (i32.i64 >-> independent >-> map f64.u32 >-> map (/norm))
+  let sobol (n:i64) : [n][D]t =
+    tabulate n (i32.i64 >-> independent >-> map T.u32 >-> map (T./ norm))
 }

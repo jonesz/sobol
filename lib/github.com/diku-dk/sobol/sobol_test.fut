@@ -3,7 +3,7 @@
 import "sobol"
 import "sobol-dir-50"
 
-module sobol = Sobol sobol_dir { let D = 2i64 }
+module sobol = Sobol sobol_dir { let D = 2i64 } f64
 
 -- ==
 -- entry: sobol_pi
